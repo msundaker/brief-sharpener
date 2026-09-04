@@ -796,20 +796,33 @@
                     ×
                   </button>
                   {showCtaMessage ? (
-                    <p
-                      style={{
-                        fontFamily: FONT,
-                        fontWeight: 700,
-                        fontSize: 17,
-                        color: GREEN,
-                        lineHeight: 1.5,
-                        margin: "0 0 20px",
-                        paddingRight: 20,
-                      }}
-                    >
-                      This brief needs more than a tighter edit. If you want someone in the room
-                      stress-testing it before it goes to a client or team, that's what I do.
-                    </p>
+                    <React.Fragment>
+                      <p
+                        style={{
+                          fontFamily: FONT,
+                          fontWeight: 700,
+                          fontSize: 19,
+                          color: GREEN,
+                          margin: "0 0 8px",
+                        }}
+                      >
+                        Get in touch
+                      </p>
+                      <p
+                        style={{
+                          fontFamily: FONT,
+                          fontSize: 14.5,
+                          color: GREEN,
+                          lineHeight: 1.6,
+                          margin: "0 0 20px",
+                          paddingRight: 10,
+                        }}
+                      >
+                        Looks like this brief could use another pair of eyes. I'm Matilda —
+                        happy to jump in and help you stress-test it before it goes to a
+                        client or team.
+                      </p>
+                    </React.Fragment>
                   ) : (
                     <React.Fragment>
                       <p
