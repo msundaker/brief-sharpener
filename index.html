@@ -62,6 +62,14 @@
 
       const MAX_FILE_BYTES = 3 * 1024 * 1024;
 
+      const CTA_MESSAGES = {
+        generic: "Email me and let's talk about your brief.",
+        gaps:
+          "Looks like this brief could use another pair of eyes. I'm Matilda — happy to jump in and help you stress-test it before it goes to a client or team.",
+        ready:
+          "Here's your sharpened brief — hope it helps. Want a hand bringing it to life? I'm Matilda, just say the word.",
+      };
+
       function BriefSharpener() {
         const [mode, setMode] = useState("text");
         const [brief, setBrief] = useState("");
@@ -79,7 +87,7 @@
         const [copyError, setCopyError] = useState(false);
         const [emailCopied, setEmailCopied] = useState(false);
         const [contactOpen, setContactOpen] = useState(false);
-        const [showCtaMessage, setShowCtaMessage] = useState(false);
+        const [ctaVariant, setCtaVariant] = useState("generic");
 
         // Word/Docs auto-formatting often bolds short ALL-CAPS lines on paste. The on-screen
         // display keeps its own bold/uppercase styling regardless — this only affects the
@@ -205,7 +213,7 @@
           setFinalizeError(null);
           setSkipped(false);
           setFinished(false);
-          setShowCtaMessage(false);
+          setCtaVariant("generic");
           try {
             const response = await fetch("/api/sharpen", {
               method: "POST",
@@ -224,7 +232,10 @@
               (c) => data.verdicts[c.key] && data.verdicts[c.key].verdict !== "sharp"
             ).length;
             if (gapCount >= 3) {
-              setShowCtaMessage(true);
+              setCtaVariant("gaps");
+              setContactOpen(true);
+            } else if (gapCount === 0) {
+              setCtaVariant("ready");
               setContactOpen(true);
             }
           } catch (e) {
@@ -272,6 +283,8 @@
             setResult(data);
             setAnswers({});
             setFinished(true);
+            setCtaVariant("ready");
+            setContactOpen(true);
           } catch (e) {
             setFinalizeError(
               `Couldn't finish the brief (${e.message || "unknown error"}). Try again.`
@@ -684,7 +697,11 @@
                           {finalizing ? "Finishing…" : "Finish it"}
                         </button>
                         <button
-                          onClick={() => setSkipped(true)}
+                          onClick={() => {
+                            setSkipped(true);
+                            setCtaVariant("ready");
+                            setContactOpen(true);
+                          }}
                           disabled={finalizing}
                           style={{
                             marginTop: 8,
@@ -732,7 +749,7 @@
                 Built by{" "}
                 <button
                   onClick={() => {
-                    setShowCtaMessage(false);
+                    setCtaVariant("generic");
                     setContactOpen(true);
                   }}
                   style={{
@@ -795,61 +812,29 @@
                   >
                     ×
                   </button>
-                  {showCtaMessage ? (
-                    <React.Fragment>
-                      <p
-                        style={{
-                          fontFamily: FONT,
-                          fontWeight: 700,
-                          fontSize: 19,
-                          color: GREEN,
-                          margin: "0 0 8px",
-                        }}
-                      >
-                        Get in touch
-                      </p>
-                      <p
-                        style={{
-                          fontFamily: FONT,
-                          fontSize: 14.5,
-                          color: GREEN,
-                          lineHeight: 1.6,
-                          margin: "0 0 20px",
-                          paddingRight: 10,
-                        }}
-                      >
-                        Looks like this brief could use another pair of eyes. I'm Matilda —
-                        happy to jump in and help you stress-test it before it goes to a
-                        client or team.
-                      </p>
-                    </React.Fragment>
-                  ) : (
-                    <React.Fragment>
-                      <p
-                        style={{
-                          fontFamily: FONT,
-                          fontWeight: 700,
-                          fontSize: 19,
-                          color: GREEN,
-                          margin: "0 0 8px",
-                        }}
-                      >
-                        Get in touch
-                      </p>
-                      <p
-                        style={{
-                          fontFamily: FONT,
-                          fontSize: 14,
-                          color: GREEN,
-                          lineHeight: 1.6,
-                          margin: "0 0 20px",
-                          maxWidth: 300,
-                        }}
-                      >
-                        Email me and let's talk about your brief.
-                      </p>
-                    </React.Fragment>
-                  )}
+                  <p
+                    style={{
+                      fontFamily: FONT,
+                      fontWeight: 700,
+                      fontSize: 19,
+                      color: GREEN,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    Get in touch
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: FONT,
+                      fontSize: 14.5,
+                      color: GREEN,
+                      lineHeight: 1.6,
+                      margin: "0 0 20px",
+                      paddingRight: 10,
+                    }}
+                  >
+                    {CTA_MESSAGES[ctaVariant]}
+                  </p>
                   <div
                     style={{
                       display: "flex",
