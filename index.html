@@ -77,9 +77,9 @@
         const [finished, setFinished] = useState(false);
         const [copied, setCopied] = useState(false);
         const [copyError, setCopyError] = useState(false);
-        const [initialGapCount, setInitialGapCount] = useState(0);
         const [emailCopied, setEmailCopied] = useState(false);
         const [contactOpen, setContactOpen] = useState(false);
+        const [showCtaMessage, setShowCtaMessage] = useState(false);
 
         // Word/Docs auto-formatting often bolds short ALL-CAPS lines on paste. The on-screen
         // display keeps its own bold/uppercase styling regardless — this only affects the
@@ -205,6 +205,7 @@
           setFinalizeError(null);
           setSkipped(false);
           setFinished(false);
+          setShowCtaMessage(false);
           try {
             const response = await fetch("/api/sharpen", {
               method: "POST",
@@ -222,7 +223,10 @@
             const gapCount = CRITERIA.filter(
               (c) => data.verdicts[c.key] && data.verdicts[c.key].verdict !== "sharp"
             ).length;
-            setInitialGapCount(gapCount);
+            if (gapCount >= 3) {
+              setShowCtaMessage(true);
+              setContactOpen(true);
+            }
           } catch (e) {
             setError(
               `Couldn't complete the read (${e.message || "unknown error"}). Try again — if it repeats, the brief may be too long for this test build.`
@@ -526,42 +530,6 @@
                   <CriteriaGroup items={primary} verdicts={result.verdicts} />
                   <CriteriaGroup items={support} verdicts={result.verdicts} />
 
-                  {initialGapCount >= 3 && (
-                    <div
-                      style={{
-                        background: CREAM,
-                        color: GREEN,
-                        borderRadius: 20,
-                        padding: "24px 26px",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <p style={{ fontFamily: FONT, fontWeight: 600, fontSize: 15.5, lineHeight: 1.6, margin: 0 }}>
-                        This brief needs more than a tighter edit. If you want someone in the room
-                        stress-testing it before it goes to a client or team, that's what I do.
-                      </p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 16 }}>
-                        <button
-                          onClick={() => setContactOpen(true)}
-                          style={{
-                            display: "inline-block",
-                            fontFamily: FONT,
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: CREAM,
-                            background: GREEN,
-                            border: "none",
-                            borderRadius: 999,
-                            padding: "11px 22px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Get in touch →
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   {(gapItems.length === 0 || skipped || finished) && (
                     <React.Fragment>
                       <SectionHeading text="Sharpened brief" style={{ marginTop: 48 }} />
@@ -763,7 +731,10 @@
               >
                 Built by{" "}
                 <button
-                  onClick={() => setContactOpen(true)}
+                  onClick={() => {
+                    setShowCtaMessage(false);
+                    setContactOpen(true);
+                  }}
                   style={{
                     fontFamily: FONT,
                     fontSize: 13,
@@ -824,29 +795,48 @@
                   >
                     ×
                   </button>
-                  <p
-                    style={{
-                      fontFamily: FONT,
-                      fontWeight: 700,
-                      fontSize: 19,
-                      color: GREEN,
-                      margin: "0 0 8px",
-                    }}
-                  >
-                    Get in touch
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: FONT,
-                      fontSize: 14,
-                      color: GREEN,
-                      lineHeight: 1.6,
-                      margin: "0 0 20px",
-                      maxWidth: 300,
-                    }}
-                  >
-                    Email me and let's talk about your brief.
-                  </p>
+                  {showCtaMessage ? (
+                    <p
+                      style={{
+                        fontFamily: FONT,
+                        fontWeight: 700,
+                        fontSize: 17,
+                        color: GREEN,
+                        lineHeight: 1.5,
+                        margin: "0 0 20px",
+                        paddingRight: 20,
+                      }}
+                    >
+                      This brief needs more than a tighter edit. If you want someone in the room
+                      stress-testing it before it goes to a client or team, that's what I do.
+                    </p>
+                  ) : (
+                    <React.Fragment>
+                      <p
+                        style={{
+                          fontFamily: FONT,
+                          fontWeight: 700,
+                          fontSize: 19,
+                          color: GREEN,
+                          margin: "0 0 8px",
+                        }}
+                      >
+                        Get in touch
+                      </p>
+                      <p
+                        style={{
+                          fontFamily: FONT,
+                          fontSize: 14,
+                          color: GREEN,
+                          lineHeight: 1.6,
+                          margin: "0 0 20px",
+                          maxWidth: 300,
+                        }}
+                      >
+                        Email me and let's talk about your brief.
+                      </p>
+                    </React.Fragment>
+                  )}
                   <div
                     style={{
                       display: "flex",
