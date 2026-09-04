@@ -79,6 +79,7 @@
         const [copyError, setCopyError] = useState(false);
         const [initialGapCount, setInitialGapCount] = useState(0);
         const [emailCopied, setEmailCopied] = useState(false);
+        const [contactOpen, setContactOpen] = useState(false);
 
         // Word/Docs auto-formatting often bolds short ALL-CAPS lines on paste. The on-screen
         // display keeps its own bold/uppercase styling regardless — this only affects the
@@ -540,8 +541,8 @@
                         stress-testing it before it goes to a client or team, that's what I do.
                       </p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 16 }}>
-                        <a
-                          href="mailto:msundaker@gmail.com?subject=Sharpening%20a%20brief%20together"
+                        <button
+                          onClick={() => setContactOpen(true)}
                           style={{
                             display: "inline-block",
                             fontFamily: FONT,
@@ -549,28 +550,13 @@
                             fontWeight: 700,
                             color: CREAM,
                             background: GREEN,
+                            border: "none",
                             borderRadius: 999,
                             padding: "11px 22px",
-                            textDecoration: "none",
+                            cursor: "pointer",
                           }}
                         >
                           Get in touch →
-                        </a>
-                        <button
-                          onClick={copyEmail}
-                          style={{
-                            fontFamily: FONT,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: GREEN,
-                            background: "transparent",
-                            border: "none",
-                            textDecoration: "underline",
-                            cursor: "pointer",
-                            padding: 0,
-                          }}
-                        >
-                          {emailCopied ? "Copied!" : "Or copy: msundaker@gmail.com"}
                         </button>
                       </div>
                     </div>
@@ -776,15 +762,8 @@
                 }}
               >
                 Built by{" "}
-                <a
-                  href="mailto:msundaker@gmail.com"
-                  style={{ color: CREAM_MUTED, textDecoration: "underline" }}
-                >
-                  Culture Shift
-                </a>
-                {" — "}
                 <button
-                  onClick={copyEmail}
+                  onClick={() => setContactOpen(true)}
                   style={{
                     fontFamily: FONT,
                     fontSize: 13,
@@ -796,10 +775,135 @@
                     padding: 0,
                   }}
                 >
-                  {emailCopied ? "Copied!" : "copy email"}
+                  Culture Shift
                 </button>
               </div>
             </div>
+
+            {contactOpen && (
+              <div
+                onClick={() => setContactOpen(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(22, 20, 15, 0.55)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 24,
+                  zIndex: 1000,
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    background: CREAM,
+                    borderRadius: 20,
+                    padding: "32px 30px",
+                    maxWidth: 400,
+                    width: "100%",
+                    position: "relative",
+                  }}
+                >
+                  <button
+                    onClick={() => setContactOpen(false)}
+                    aria-label="Close"
+                    style={{
+                      position: "absolute",
+                      top: 16,
+                      right: 16,
+                      fontFamily: FONT,
+                      fontSize: 20,
+                      lineHeight: 1,
+                      color: GREEN,
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                  <p
+                    style={{
+                      fontFamily: FONT,
+                      fontWeight: 700,
+                      fontSize: 19,
+                      color: GREEN,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    Get in touch
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: FONT,
+                      fontSize: 14,
+                      color: GREEN,
+                      lineHeight: 1.6,
+                      margin: "0 0 20px",
+                      maxWidth: 300,
+                    }}
+                  >
+                    Email me and let's talk about your brief.
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      background: WHITE,
+                      borderRadius: 12,
+                      padding: "12px 14px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: FONT,
+                        fontSize: 14.5,
+                        fontWeight: 600,
+                        color: GREEN,
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      msundaker@gmail.com
+                    </span>
+                    <button
+                      onClick={copyEmail}
+                      style={{
+                        fontFamily: FONT,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: CREAM,
+                        background: GREEN,
+                        border: "none",
+                        borderRadius: 999,
+                        padding: "8px 16px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {emailCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <a
+                    href="mailto:msundaker@gmail.com?subject=Sharpening%20a%20brief%20together"
+                    style={{
+                      display: "inline-block",
+                      marginTop: 16,
+                      fontFamily: FONT,
+                      fontSize: 13,
+                      color: GREEN_MID,
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Or open in your mail app →
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         );
       }
