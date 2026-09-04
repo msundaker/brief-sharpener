@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brief Sharpener</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html, body { margin: 0; padding: 0; background: #1C2C24; }
+      #root { min-height: 100vh; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel" data-type="module">
+      const { useState } = React;
+
+      const FONT = "'Instrument Sans', -apple-system, 'Segoe UI', sans-serif";
+
+      // Brand — green sampled from the profile photo background
+      const GREEN = "#1C2C24";
+      const GREEN_MID = "#3F6B4C";
+      const CREAM = "#F1EDE3";
+      const CREAM_MUTED = "#A9B7AB";
+      const CREAM_BORDER = "#3A4A3E";
+
+      // Surfaces — every input/content card stays white regardless of page bg
+      const WHITE = "#FFFFFF";
+      const INK = "#16140F";
+      const MUTED = "#7A7568";
+      const BORDER = "#E4DFD1";
+      const BORDER_STRONG = "#D6CFBC";
+
+      const AMBER = "#B8853A";
+      const RED = "#A73E2E";
+
+      const CRITERIA = [
+        { key: "why", label: "Why", tier: "primary" },
+        { key: "audience", label: "Audience", tier: "primary" },
+        { key: "idea", label: "Idea", tier: "primary" },
+        { key: "business", label: "Business case", tier: "support" },
+        { key: "success", label: "Success", tier: "support" },
+        { key: "execution", label: "Execution", tier: "support" },
+      ];
+
+      const VERDICT_STYLE = {
+        sharp: { bg: GREEN_MID, text: CREAM, label: "SHARP" },
+        "needs work": { bg: AMBER, text: CREAM, label: "NEEDS WORK" },
+        missing: { bg: RED, text: CREAM, label: "MISSING" },
+      };
+
+      const MAX_FILE_BYTES = 3 * 1024 * 1024;
+
+      function BriefSharpener() {
+        const [mode, setMode] = useState("text");
+        const [brief, setBrief] = useState("");
+        const [file, setFile] = useState(null);
+        const [fileError, setFileError] = useState(null);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState(null);
+        const [result, setResult] = useState(null);
+        const [answers, setAnswers] = useState({});
+        const [finalizing, setFinalizing] = useState(false);
+        const [finalizeError, setFinalizeError] = useState(null);
+        const [skipped, setSkipped] = useState(false);
+        const [finished, setFinished] = useState(false);
+        const [copied, setCopied] = useState(false);
+        const [copyError, setCopyError] = useState(false);
+        const [initialGapCount, setInitialGapCount] = useState(0);
+
+        // Word/Docs auto-formatting often bolds short ALL-CAPS lines on paste. The on-screen
+        // display keeps its own bold/uppercase styling regardless — this only affects the
+        // plain text that leaves the app via Copy/Download, so nothing triggers that there.
+        const plainTextBrief = (text) =>
+          (text || "")
+            .split("\n")
+            .map((line) => {
+              const match = line.match(/^([A-Z][A-Z &]{2,30}):(.*)$/);
+              if (!match) return line;
+              const titled = match[1]
+                .toLowerCase()
+                .replace(/\b\w/g, (ch) => ch.toUpperCase());
+              return `${titled}:${match[2]}`;
+            })
+            .join("\n");
+
+        const fallbackCopy = (text) => {
+          try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            const ok = document.execCommand("copy");
+            document.body.removeChild(textarea);
+            if (ok) {
+              setCopied(true);
+              setCopyError(false);
+              setTimeout(() => setCopied(false), 2000);
+            } else {
+              setCopyError(true);
+            }
+          } catch (e) {
+            setCopyError(true);
+          }
+        };
+
+        const copyBrief = () => {
+          if (!result) return;
+          const text = plainTextBrief(result.sharpenedBrief);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+              () => {
+                setCopied(true);
+                setCopyError(false);
+                setTimeout(() => setCopied(false), 2000);
+              },
+              () => fallbackCopy(text)
+            );
+          } else {
+            fallbackCopy(text);
+          }
+        };
+
+        const downloadBrief = () => {
+          if (!result) return;
+          const blob = new Blob([plainTextBrief(result.sharpenedBrief)], { type: "text/plain" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "sharpened-brief.txt";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        };
+
+        const canRun = mode === "text" ? !!brief.trim() : !!file;
+
+        const handleFileChange = (e) => {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return;
+          setFileError(null);
+          setFile(null);
+
+          if (f.size > MAX_FILE_BYTES) {
+            setFileError("File is too large — keep it under 3MB, or paste the text directly.");
+            e.target.value = "";
+            return;
+          }
+          const name = f.name.toLowerCase();
+          const isPdf = f.type === "application/pdf" || name.endsWith(".pdf");
+          const isPptx = name.endsWith(".pptx") || f.type.includes("presentation");
+          if (!isPdf && !isPptx) {
+            setFileError("Only PDF or .pptx are supported. For Keynote, export to PDF first (File → Export To → PDF).");
+            e.target.value = "";
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result || "";
+            const base64 = String(dataUrl).split(",")[1] || "";
+            setFile({ name: f.name, type: f.type, dataBase64: base64 });
+          };
+          reader.onerror = () => setFileError("Couldn't read that file. Try again.");
+          reader.readAsDataURL(f);
+        };
+
+        const basePayload = () =>
+          mode === "file"
+            ? { file: { name: file.name, type: file.type, dataBase64: file.dataBase64 } }
+            : { brief };
+
+        const runRead = async () => {
+          if (!canRun) return;
+          setLoading(true);
+          setError(null);
+          setResult(null);
+          setAnswers({});
+          setFinalizeError(null);
+          setSkipped(false);
+          setFinished(false);
+          try {
+            const response = await fetch("/api/sharpen", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(basePayload()),
+            });
+            const data = await response.json();
+            if (!response.ok || data?.error) {
+              throw new Error(data?.error?.message || "API error");
+            }
+            if (!data.verdicts || !data.sharpenedBrief) {
+              throw new Error("Response was missing expected fields.");
+            }
+            setResult(data);
+            const gapCount = CRITERIA.filter(
+              (c) => data.verdicts[c.key] && data.verdicts[c.key].verdict !== "sharp"
+            ).length;
+            setInitialGapCount(gapCount);
+          } catch (e) {
+            setError(
+              `Couldn't complete the read (${e.message || "unknown error"}). Try again — if it repeats, the brief may be too long for this test build.`
+            );
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const gapItems = result
+          ? CRITERIA.filter((c) => result.verdicts[c.key] && result.verdicts[c.key].verdict !== "sharp")
+          : [];
+        const hasAnswers = gapItems.some((c) => (answers[c.key] || "").trim());
+
+        const finishBrief = async () => {
+          if (!result) return;
+          if (!hasAnswers) {
+            setFinalizeError("Answer at least one question above first — otherwise there's nothing new to add.");
+            return;
+          }
+          setFinalizing(true);
+          setFinalizeError(null);
+          try {
+            const answerList = gapItems
+              .filter((c) => (answers[c.key] || "").trim())
+              .map((c) => ({
+                label: c.label,
+                question: result.verdicts[c.key].question,
+                answer: answers[c.key].trim(),
+              }));
+            const response = await fetch("/api/sharpen", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...basePayload(), answers: answerList }),
+            });
+            const data = await response.json();
+            if (!response.ok || data?.error) {
+              throw new Error(data?.error?.message || "API error");
+            }
+            if (!data.verdicts || !data.sharpenedBrief) {
+              throw new Error("Response was missing expected fields.");
+            }
+            setResult(data);
+            setAnswers({});
+            setFinished(true);
+          } catch (e) {
+            setFinalizeError(
+              `Couldn't finish the brief (${e.message || "unknown error"}). Try again.`
+            );
+          } finally {
+            setFinalizing(false);
+          }
+        };
+
+        const primary = CRITERIA.filter((c) => c.tier === "primary");
+        const support = CRITERIA.filter((c) => c.tier === "support");
+
+        return (
+          <div
+            style={{
+              background: GREEN,
+              color: CREAM,
+              minHeight: "100%",
+              fontFamily: FONT,
+              padding: "56px 24px",
+            }}
+          >
+            <div style={{ maxWidth: 720, margin: "0 auto" }}>
+              {/* Header */}
+              <div style={{ marginBottom: 44 }}>
+                <div
+                  style={{
+                    fontFamily: FONT,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: "0.14em",
+                    color: CREAM_MUTED,
+                    marginBottom: 12,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  A strategist's second read
+                </div>
+                <h1
+                  style={{
+                    fontFamily: FONT,
+                    fontSize: "clamp(3.25rem, 9vw, 6rem)",
+                    fontWeight: 700,
+                    margin: 0,
+                    lineHeight: 0.94,
+                    letterSpacing: "-0.04em",
+                    textTransform: "uppercase",
+                    color: CREAM,
+                    WebkitTextStroke: "0.7px " + CREAM,
+                  }}
+                >
+                  Brief Sharpener
+                </h1>
+                <p
+                  style={{
+                    fontFamily: FONT,
+                    fontSize: 16,
+                    color: CREAM_MUTED,
+                    marginTop: 20,
+                    lineHeight: 1.6,
+                    maxWidth: 560,
+                  }}
+                >
+                  Paste a brief. It won't invent your audience or your reason why —
+                  it will tell you exactly where the thinking is thin, and sharpen
+                  what can be sharpened.
+                </p>
+              </div>
+
+              {/* Input */}
+              <div style={{ marginBottom: 32 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <label
+                    style={{
+                      fontFamily: FONT,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: CREAM_MUTED,
+                    }}
+                  >
+                    The brief
+                  </label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[
+                      { key: "text", label: "Paste text" },
+                      { key: "file", label: "Upload PDF / PPTX" },
+                    ].map((m) => (
+                      <button
+                        key={m.key}
+                        onClick={() => setMode(m.key)}
+                        style={{
+                          fontFamily: FONT,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          padding: "7px 16px",
+                          borderRadius: 999,
+                          border: mode === m.key ? `1px solid ${CREAM}` : `1px solid ${CREAM_BORDER}`,
+                          background: mode === m.key ? CREAM : "transparent",
+                          color: mode === m.key ? GREEN : CREAM_MUTED,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {mode === "text" ? (
+                  <textarea
+                    value={brief}
+                    onChange={(e) => setBrief(e.target.value)}
+                    placeholder="Paste the brief here, any format..."
+                    rows={10}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: CREAM,
+                      border: "none",
+                      borderRadius: 20,
+                      padding: 20,
+                      fontFamily: FONT,
+                      fontSize: 15,
+                      lineHeight: 1.6,
+                      color: INK,
+                      resize: "vertical",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      background: CREAM,
+                      border: "none",
+                      borderRadius: 20,
+                      padding: 20,
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      onChange={handleFileChange}
+                      style={{
+                        fontFamily: FONT,
+                        fontSize: 13,
+                        color: INK,
+                      }}
+                    />
+                    {file && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          fontFamily: FONT,
+                          fontSize: 13,
+                          color: INK,
+                        }}
+                      >
+                        {file.name}{" "}
+                        <button
+                          onClick={() => setFile(null)}
+                          style={{
+                            marginLeft: 8,
+                            fontFamily: FONT,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            background: "transparent",
+                            border: "none",
+                            color: RED,
+                            cursor: "pointer",
+                            textDecoration: "underline",
+                            padding: 0,
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                    <p
+                      style={{
+                        fontFamily: FONT,
+                        fontSize: 12,
+                        color: MUTED,
+                        marginTop: 10,
+                        marginBottom: 0,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      PDF or PowerPoint (.pptx), up to 3MB. For Keynote, export to PDF first (File → Export To → PDF).
+                    </p>
+                    {fileError && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontFamily: FONT,
+                          fontSize: 13,
+                          color: RED,
+                        }}
+                      >
+                        {fileError}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={runRead}
+                  disabled={loading || !canRun}
+                  style={{
+                    marginTop: 18,
+                    fontFamily: FONT,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    padding: "16px 32px",
+                    borderRadius: 999,
+                    background: loading || !canRun ? "#3A4A3E" : CREAM,
+                    color: loading || !canRun ? "#7A8578" : GREEN,
+                    border: "none",
+                    cursor: loading || !canRun ? "default" : "pointer",
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  {loading ? "Sharpening…" : "Sharpen it"}
+                </button>
+                <p
+                  style={{
+                    marginTop: 14,
+                    marginBottom: 0,
+                    fontFamily: FONT,
+                    fontSize: 12.5,
+                    color: CREAM_MUTED,
+                    lineHeight: 1.5,
+                    maxWidth: 560,
+                  }}
+                >
+                  The brief text (or uploaded file) is sent to Anthropic's API to generate this read. It isn't stored by this tool, but it isn't private to Culture Shift either — don't paste anything under NDA, unreleased financials, or personal data you're not authorized to share outside the company. If in doubt, swap out the brand name and other identifying details for placeholders (e.g. "[Client]") — the read still works fine on a brief's structure and thinking without them.
+                </p>
+                {error && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      fontFamily: FONT,
+                      fontSize: 13,
+                      color: "#F4B8A8",
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              {/* Output */}
+              {result && (
+                <div style={{ marginTop: 48 }}>
+                  <SectionHeading text="The read" />
+                  <CriteriaGroup items={primary} verdicts={result.verdicts} />
+                  <CriteriaGroup items={support} verdicts={result.verdicts} />
+
+                  {initialGapCount >= 3 && (
+                    <div
+                      style={{
+                        background: CREAM,
+                        color: GREEN,
+                        borderRadius: 20,
+                        padding: "24px 26px",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <p style={{ fontFamily: FONT, fontWeight: 600, fontSize: 15.5, lineHeight: 1.6, margin: 0 }}>
+                        This brief needs more than a tighter edit. If you want someone in the room
+                        stress-testing it before it goes to a client or team, that's what I do.
+                      </p>
+                      <a
+                        href="mailto:msundaker@gmail.com?subject=Sharpening%20a%20brief%20together"
+                        style={{
+                          display: "inline-block",
+                          marginTop: 16,
+                          fontFamily: FONT,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: CREAM,
+                          background: GREEN,
+                          borderRadius: 999,
+                          padding: "11px 22px",
+                          textDecoration: "none",
+                        }}
+                      >
+                        Get in touch →
+                      </a>
+                    </div>
+                  )}
+
+                  {(gapItems.length === 0 || skipped || finished) && (
+                    <React.Fragment>
+                      <SectionHeading text="Sharpened brief" style={{ marginTop: 48 }} />
+                      <div
+                        style={{
+                          background: WHITE,
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 20,
+                          padding: 26,
+                          fontSize: 15.5,
+                          lineHeight: 1.7,
+                          whiteSpace: "pre-wrap",
+                          color: INK,
+                        }}
+                      >
+                        <SharpenedBriefText text={result.sharpenedBrief} />
+                      </div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                        <button
+                          onClick={copyBrief}
+                          style={{
+                            fontFamily: FONT,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: "10px 20px",
+                            borderRadius: 999,
+                            background: "transparent",
+                            color: CREAM,
+                            border: `1px solid ${CREAM_BORDER}`,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {copied ? "Copied!" : "Copy"}
+                        </button>
+                        <button
+                          onClick={downloadBrief}
+                          style={{
+                            fontFamily: FONT,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: "10px 20px",
+                            borderRadius: 999,
+                            background: "transparent",
+                            color: CREAM,
+                            border: `1px solid ${CREAM_BORDER}`,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Download .txt
+                        </button>
+                      </div>
+                      {copyError && (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            fontFamily: FONT,
+                            fontSize: 13,
+                            color: "#F4B8A8",
+                          }}
+                        >
+                          Couldn't copy automatically — select the text above and copy it manually (Cmd/Ctrl+C).
+                        </div>
+                      )}
+                    </React.Fragment>
+                  )}
+
+                  {gapItems.length > 0 && !skipped && !finished && (
+                    <div style={{ marginTop: 48 }}>
+                      <SectionHeading text="Close the gaps" />
+                      <p
+                        style={{
+                          fontFamily: FONT,
+                          fontSize: 13.5,
+                          color: CREAM_MUTED,
+                          marginTop: -6,
+                          marginBottom: 22,
+                          lineHeight: 1.6,
+                          maxWidth: 560,
+                        }}
+                      >
+                        Answer whichever of these you actually know — skip the rest. This is your one round:
+                        "Finish it" folds your answers back in and gives you a final, sharpened summary of
+                        your brief — one clean document, no further questions. Don't want to answer any?
+                        "Skip it" shows that summary as it stands now, brackets and all.
+                      </p>
+                      {gapItems.map((c) => (
+                        <div
+                          key={c.key}
+                          style={{
+                            background: WHITE,
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 16,
+                            padding: 18,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <label
+                            style={{
+                              fontFamily: FONT,
+                              fontStyle: "italic",
+                              fontWeight: 500,
+                              fontSize: 14.5,
+                              color: INK,
+                              display: "block",
+                              marginBottom: 10,
+                            }}
+                          >
+                            {c.label}: {result.verdicts[c.key].question}
+                          </label>
+                          <textarea
+                            value={answers[c.key] || ""}
+                            onChange={(e) =>
+                              setAnswers((prev) => ({ ...prev, [c.key]: e.target.value }))
+                            }
+                            placeholder="Your answer..."
+                            rows={2}
+                            style={{
+                              width: "100%",
+                              boxSizing: "border-box",
+                              background: CREAM,
+                              border: "none",
+                              borderRadius: 12,
+                              padding: 12,
+                              fontFamily: FONT,
+                              fontSize: 14,
+                              lineHeight: 1.5,
+                              color: INK,
+                              resize: "vertical",
+                            }}
+                          />
+                        </div>
+                      ))}
+
+                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        <button
+                          onClick={finishBrief}
+                          disabled={finalizing}
+                          style={{
+                            marginTop: 8,
+                            fontFamily: FONT,
+                            fontSize: 16,
+                            fontWeight: 700,
+                            padding: "16px 32px",
+                            borderRadius: 999,
+                            background: finalizing ? "#3A4A3E" : CREAM,
+                            color: finalizing ? "#7A8578" : GREEN,
+                            border: "none",
+                            cursor: finalizing ? "default" : "pointer",
+                            letterSpacing: "0.01em",
+                          }}
+                        >
+                          {finalizing ? "Finishing…" : "Finish it"}
+                        </button>
+                        <button
+                          onClick={() => setSkipped(true)}
+                          disabled={finalizing}
+                          style={{
+                            marginTop: 8,
+                            fontFamily: FONT,
+                            fontSize: 16,
+                            fontWeight: 600,
+                            padding: "16px 32px",
+                            borderRadius: 999,
+                            background: "transparent",
+                            color: CREAM_MUTED,
+                            border: `1px solid ${CREAM_BORDER}`,
+                            cursor: finalizing ? "default" : "pointer",
+                          }}
+                        >
+                          Skip it
+                        </button>
+                      </div>
+                      {finalizeError && (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            fontFamily: FONT,
+                            fontSize: 13,
+                            color: "#F4B8A8",
+                          }}
+                        >
+                          {finalizeError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div
+                style={{
+                  marginTop: 64,
+                  paddingTop: 24,
+                  borderTop: `1px solid ${CREAM_BORDER}`,
+                  fontFamily: FONT,
+                  fontSize: 13,
+                  color: CREAM_MUTED,
+                }}
+              >
+                Built by{" "}
+                <a
+                  href="mailto:msundaker@gmail.com"
+                  style={{ color: CREAM_MUTED, textDecoration: "underline" }}
+                >
+                  Culture Shift
+                </a>
+                .
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function SharpenedBriefText({ text }) {
+        const lines = (text || "").split("\n");
+        return (
+          <React.Fragment>
+            {lines.map((line, i) => {
+              const match = line.match(/^([A-Z][A-Z &]{2,30}):\s*(.*)$/);
+              if (match) {
+                return (
+                  <div key={i} style={{ marginTop: i === 0 ? 0 : 18 }}>
+                    <span
+                      style={{
+                        fontFamily: FONT,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        letterSpacing: "0.08em",
+                        color: MUTED,
+                      }}
+                    >
+                      {match[1]}
+                    </span>
+                    {match[2] && <span>{" "}{match[2]}</span>}
+                  </div>
+                );
+              }
+              if (line.trim() === "") return null;
+              return <div key={i}>{line}</div>;
+            })}
+          </React.Fragment>
+        );
+      }
+
+      function SectionHeading({ text, style }) {
+        return (
+          <div
+            style={{
+              fontFamily: FONT,
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: CREAM,
+              paddingBottom: 12,
+              marginBottom: 20,
+              borderBottom: `1px solid ${CREAM_BORDER}`,
+              ...style,
+            }}
+          >
+            {text}
+          </div>
+        );
+      }
+
+      function CriteriaGroup({ items, verdicts }) {
+        return (
+          <div style={{ marginBottom: 22 }}>
+            {items.map((c) => {
+              const v = verdicts?.[c.key];
+              if (!v) return null;
+              const style = VERDICT_STYLE[v.verdict] || VERDICT_STYLE.missing;
+              return (
+                <div
+                  key={c.key}
+                  style={{
+                    background: WHITE,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 16,
+                    padding: "16px 18px",
+                    marginBottom: 10,
+                    display: "flex",
+                    gap: 14,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: FONT,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.05em",
+                      color: style.text,
+                      background: style.bg,
+                      borderRadius: 999,
+                      padding: "5px 12px",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      marginTop: 1,
+                    }}
+                  >
+                    {style.label}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontFamily: FONT,
+                        fontWeight: 700,
+                        fontSize: 15,
+                        color: INK,
+                      }}
+                    >
+                      {c.label}
+                    </div>
+                    {v.question && (
+                      <div
+                        style={{
+                          fontFamily: FONT,
+                          fontStyle: "italic",
+                          fontWeight: 400,
+                          fontSize: 14,
+                          color: MUTED,
+                          marginTop: 4,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {v.question}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<BriefSharpener />);
+    </script>
+  </body>
+</html>
