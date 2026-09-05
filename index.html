@@ -64,10 +64,8 @@
 
       const CTA_MESSAGES = {
         generic: "Email me and let's talk about your brief.",
-        gaps:
-          "Looks like this brief could use another pair of eyes. I'm Matilda — happy to jump in and help you stress-test it before it goes to a client or team.",
         ready:
-          "Here's your sharpened brief — hope it helps. Want a hand bringing it to life? I'm Matilda, just say the word.",
+          "Here's your sharpened brief — hope it helps. I'm Matilda, happy to jump in and help you bring it to life before it goes to a client or team. Just say the word.",
       };
 
       function BriefSharpener() {
@@ -231,10 +229,7 @@
             const gapCount = CRITERIA.filter(
               (c) => data.verdicts[c.key] && data.verdicts[c.key].verdict !== "sharp"
             ).length;
-            if (gapCount >= 3) {
-              setCtaVariant("gaps");
-              setContactOpen(true);
-            } else if (gapCount === 0) {
+            if (gapCount === 0) {
               setCtaVariant("ready");
               setContactOpen(true);
             }
@@ -706,9 +701,9 @@
                           style={{
                             marginTop: 8,
                             fontFamily: FONT,
-                            fontSize: 16,
+                            fontSize: 13.5,
                             fontWeight: 600,
-                            padding: "16px 32px",
+                            padding: "11px 22px",
                             borderRadius: 999,
                             background: "transparent",
                             color: CREAM_MUTED,
