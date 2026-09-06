@@ -46,12 +46,42 @@
       const RED = "#A73E2E";
 
       const CRITERIA = [
-        { key: "why", label: "Why", tier: "primary" },
-        { key: "audience", label: "Audience", tier: "primary" },
-        { key: "idea", label: "Idea", tier: "primary" },
-        { key: "business", label: "Business case", tier: "support" },
-        { key: "success", label: "Success", tier: "support" },
-        { key: "execution", label: "Execution", tier: "support" },
+        {
+          key: "why",
+          label: "Why",
+          tier: "primary",
+          description: "The reason for being — as a brand or campaign.",
+        },
+        {
+          key: "audience",
+          label: "Audience",
+          tier: "primary",
+          description: "Who this is really for, and the real tension or truth about them the work taps into.",
+        },
+        {
+          key: "idea",
+          label: "Idea",
+          tier: "primary",
+          description: "The one central idea that should build meaning across every touchpoint.",
+        },
+        {
+          key: "business",
+          label: "Business case",
+          tier: "support",
+          description: "How this connects to a specific business lever — trial, retention, price, growth.",
+        },
+        {
+          key: "success",
+          label: "Success",
+          tier: "support",
+          description: "How you'll know it worked — a specific, measurable definition.",
+        },
+        {
+          key: "execution",
+          label: "Execution",
+          tier: "support",
+          description: "The operational plan — channels, timing and budget that bring the idea to life.",
+        },
       ];
 
       const VERDICT_STYLE = {
@@ -983,11 +1013,15 @@
                   </div>
                   <div style={{ flex: 1 }}>
                     <div
+                      title={c.description}
                       style={{
                         fontFamily: FONT,
                         fontWeight: 700,
                         fontSize: 15,
                         color: INK,
+                        display: "inline-block",
+                        borderBottom: `1px dotted ${MUTED}`,
+                        cursor: "help",
                       }}
                     >
                       {c.label}
