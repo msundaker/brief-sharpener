@@ -974,6 +974,7 @@
       }
 
       function CriteriaGroup({ items, verdicts }) {
+        const [hoveredKey, setHoveredKey] = useState(null);
         return (
           <div style={{ marginBottom: 22 }}>
             {items.map((c) => {
@@ -1012,20 +1013,48 @@
                     {style.label}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div
-                      title={c.description}
-                      style={{
-                        fontFamily: FONT,
-                        fontWeight: 700,
-                        fontSize: 15,
-                        color: INK,
-                        display: "inline-block",
-                        borderBottom: `1px dotted ${MUTED}`,
-                        cursor: "help",
-                      }}
+                    <span
+                      style={{ position: "relative", display: "inline-block" }}
+                      onMouseEnter={() => setHoveredKey(c.key)}
+                      onMouseLeave={() => setHoveredKey(null)}
+                      onClick={() => setHoveredKey(hoveredKey === c.key ? null : c.key)}
                     >
-                      {c.label}
-                    </div>
+                      <span
+                        style={{
+                          fontFamily: FONT,
+                          fontWeight: 700,
+                          fontSize: 15,
+                          color: INK,
+                          borderBottom: `1px dotted ${MUTED}`,
+                          cursor: "help",
+                        }}
+                      >
+                        {c.label}
+                      </span>
+                      {hoveredKey === c.key && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: "calc(100% + 8px)",
+                            left: 0,
+                            background: GREEN,
+                            color: CREAM,
+                            fontFamily: FONT,
+                            fontWeight: 400,
+                            fontSize: 13,
+                            lineHeight: 1.4,
+                            padding: "9px 13px",
+                            borderRadius: 10,
+                            width: 220,
+                            whiteSpace: "normal",
+                            boxShadow: "0 6px 18px rgba(0,0,0,0.3)",
+                            zIndex: 10,
+                          }}
+                        >
+                          {c.description}
+                        </div>
+                      )}
+                    </span>
                     {v.question && (
                       <div
                         style={{
